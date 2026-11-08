@@ -1,6 +1,8 @@
 # Local operational documents and planning materials
 /day-zero/
 /AGENTS.md
+# Third-party papers, not ours to redistribute
+/references-papers/
 __pycache__/
 .pytest_cache/
 .venv/
