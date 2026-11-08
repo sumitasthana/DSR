@@ -1,0 +1,23 @@
+# M0 uses one fixed public checkpoint. Seeds do not represent independent pretraining.
+seeds: [0, 1, 2]
+runtime:
+  device: cpu
+  threads: 4  # Bound local CPU use; feature extraction needs no training GPU.
+data:
+  root: data  # Paths are relative to this config file, not the working directory.
+  download: true
+  batch_size: 256
+  workers: 0  # Portable Windows and Colab default.
+  # Explicit preprocessing assumption; no random augmentation for reusable caches.
+  mean: [0.5071, 0.4867, 0.4408]
+  std: [0.2675, 0.2565, 0.2761]
+model:
+  repository: chenyaofo/pytorch-cifar-models
+  revision: 786c16252c0fc58ee9adac063f8337cc4a7a497a
+  entrypoint: cifar100_resnet20
+  feature_dim: 64
+  classes: 100
+cache:
+  root: outputs/m0
+  parity_atol: 0.00001
+  parity_rtol: 0.00001
