@@ -1,6 +1,7 @@
 """Prepare a frozen CIFAR-100 baseline: python -m src.run_m0 --check-only."""
 
 import argparse
+from copy import deepcopy
 from datetime import datetime, timezone
 import json
 from pathlib import Path
@@ -8,14 +9,25 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from .common import digest, file_hash, load_config, provenance, save_json, save_tensors, seed_everything
+from .common import digest, load_config, provenance, save_json, save_tensors, seed_everything
+from .cache import load_or_create_cache
 from .data import cifar100_loader, extract_features, validate_cache
 from .evaluate import accuracy
 from .models import checkpoint_hash, head_state, load_backbone
 
 
 def run(config_path, check_only=False):
-    cfg = load_config(config_path)
+    """File-based entry point shared by the CLI and existing callers."""
+    return prepare_baseline(load_config(config_path), check_only=check_only)
+
+
+def prepare_baseline(config, check_only=False):
+    """Run M0 from a resolved configuration, including from a notebook.
+
+    Load configuration with load_config first to resolve storage paths. A copy
+    prevents the runner from changing the caller's settings between experiments.
+    """
+    cfg = deepcopy(config)
     torch.set_num_threads(cfg["runtime"]["threads"])
     context = provenance()
     print(json.dumps({"configuration": cfg, "environment": context}, indent=2))
@@ -37,22 +49,13 @@ def run(config_path, check_only=False):
     caches = {}
     for split in ("train", "test"):
         loader = cifar100_loader(cfg, split)
-        path = folder / f"{split}.pt"
-        manifest_path = folder / f"{split}.json"
-        if path.exists() and manifest_path.exists():
-            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-            if manifest["sha256"] != file_hash(path) or manifest["identity"] != digest(identity):
-                raise ValueError(f"Cache integrity or identity mismatch: {path}")
-            cache = torch.load(path, map_location="cpu", weights_only=True)
-            validate_cache(cache, cfg, len(loader.dataset))
-            print(f"Resumed verified {split} cache: {len(loader.dataset)} rows", flush=True)
-        else:
-            print(f"Extracting {split}: {len(loader.dataset)} images", flush=True)
-            cache = extract_features(model, loader, cfg)
-            save_tensors(path, cache)
-            save_json(manifest_path, {"sha256": file_hash(path), "identity": digest(identity),
-                                      "rows": len(loader.dataset), "bytes": path.stat().st_size})
-            print(f"Saved and verified {split}: {path}", flush=True)
+        print(f"Preparing {split}: {len(loader.dataset)} images", flush=True)
+        cache, resumed = load_or_create_cache(
+            folder, split, identity,
+            create=lambda: extract_features(model, loader, cfg),
+            validate=lambda value: validate_cache(value, cfg, len(loader.dataset)),
+        )
+        print(f"{'Resumed' if resumed else 'Saved'} verified {split} cache", flush=True)
         caches[split] = cache
     rows = []
     for seed in cfg["seeds"]:

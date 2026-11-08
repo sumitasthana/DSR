@@ -38,7 +38,7 @@ def file_hash(path):
 
 
 def provenance():
-    root = Path(__file__).resolve().parents[2]
+    root = Path(__file__).resolve().parents[1]
 
     def git(*args):
         result = subprocess.run(["git", *args], cwd=root, capture_output=True, text=True)
@@ -48,7 +48,7 @@ def provenance():
         "commit": git("rev-parse", "HEAD"),
         "git_status": git("status", "--porcelain"),
         "source_sha256": {str(p.relative_to(root)): file_hash(p)
-                          for p in sorted((root / "codebase" / "src").glob("*.py"))},
+                          for p in sorted((root / "src").rglob("*.py"))},
         "python": sys.version, "platform": platform.platform(),
         "torch": torch.__version__, "torchvision": torchvision.__version__,
         "numpy": np.__version__, "cuda_available": torch.cuda.is_available(),

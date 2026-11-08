@@ -1,10 +1,11 @@
 # Local operational documents and planning materials
 /day-zero/
 /AGENTS.md
-/codebase/AGENTS.md
 __pycache__/
 .pytest_cache/
 .venv/
-/codebase/data/
-/codebase/outputs/
-/codebase/results/
+/data/
+/outputs/
+/results/
+*.egg-info/
+build/
