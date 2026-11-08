@@ -21,3 +21,12 @@ cache:
   root: outputs/m0
   parity_atol: 0.00001
   parity_rtol: 0.00001
+projection:
+  rank: 4
+  rank_atol: 0.000000000001
+  rank_rtol: 0.00000001
+  feasibility_atol: 0.00000001
+  feasibility_rtol: 0.000001
+  dtype: float64  # Resolve rank and projector drift in double precision.
+lora:
+  init_std: 0.01  # Explicit assumption: Gaussian A, zero B.
