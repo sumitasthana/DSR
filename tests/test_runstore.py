@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from src.common import file_hash
-from src.runstore import RunStore
+from src.runstore import RunStore, credential, dotenv, secret
 
 
 class NotFound(Exception):
@@ -112,3 +112,42 @@ def test_runs_lists_labels(store, run_folder):
 def test_bad_run_labels_are_refused(store, run_folder, label):
     with pytest.raises(ValueError):
         store.put(run_folder, label)
+
+
+def test_dotenv_reads_pairs_and_skips_noise(tmp_path):
+    path = tmp_path / ".env"
+    path.write_text(
+        "# a comment\n"
+        "\n"
+        "R2_ENDPOINT=https://acct.r2.cloudflarestorage.com\n"
+        '  R2_ACCESS_KEY_ID = "spaced"  \n'
+        "R2_SECRET_ACCESS_KEY='has=equals=inside'\n"
+        "not a pair\n",
+        encoding="utf-8")
+    assert dotenv(path) == {
+        "R2_ENDPOINT": "https://acct.r2.cloudflarestorage.com",
+        "R2_ACCESS_KEY_ID": "spaced",
+        "R2_SECRET_ACCESS_KEY": "has=equals=inside",
+    }
+
+
+def test_dotenv_without_a_file_is_empty(tmp_path):
+    assert dotenv(tmp_path / "absent") == {}
+
+
+def test_secret_prefers_the_environment_over_the_file(tmp_path, monkeypatch):
+    path = tmp_path / ".env"
+    path.write_text("R2_ENDPOINT=from-file\n", encoding="utf-8")
+    monkeypatch.setattr("src.runstore.ENV_FILE", path)
+    monkeypatch.setenv("R2_ENDPOINT", "from-env")
+    assert secret("R2_ENDPOINT") == "from-env"
+    monkeypatch.delenv("R2_ENDPOINT")
+    assert secret("R2_ENDPOINT") == "from-file"
+
+
+def test_project_prefix_wins_over_the_old_name(monkeypatch, tmp_path):
+    monkeypatch.setattr("src.runstore.ENV_FILE", tmp_path / "absent")
+    monkeypatch.setenv("R2_ACCESS_KEY_ID", "hypernetwork-token")
+    assert credential("ACCESS_KEY_ID") == "hypernetwork-token"
+    monkeypatch.setenv("DSR_ACCESS_KEY_ID", "this-project")
+    assert credential("ACCESS_KEY_ID") == "this-project"

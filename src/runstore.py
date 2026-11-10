@@ -27,8 +27,26 @@ PREFIX = "dsr"
 BUCKET = "dsr-runs"   # This project only. The hypernetwork work uses its own bucket.
 
 
+#: A local .env, for runs outside Colab. Colab secrets still win over it, so a
+#: stale file in a clone cannot shadow the values set in the session.
+ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
+
+
+def dotenv(path=None):
+    """`KEY=value` lines from a .env file. Empty when there is no file."""
+    path = path or ENV_FILE
+    values = {}
+    if path.exists():
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, value = line.split("=", 1)
+                values[key.strip()] = value.strip().strip('"').strip("'")
+    return values
+
+
 def secret(name):
-    """An environment variable, falling back to Colab's secret store."""
+    """An environment variable, then Colab's secret store, then a local .env."""
     value = os.environ.get(name)
     if not value:
         try:
@@ -36,7 +54,20 @@ def secret(name):
             value = userdata.get(name)
         except Exception:
             value = None
+    if not value:
+        value = dotenv().get(name)
     return value
+
+
+#: One Colab account holds credentials for several projects, so this project's
+#: secrets carry its own prefix. `R2_*` is the older unprefixed naming, still
+#: accepted so an existing local .env or shell keeps working.
+FIELDS = ("ENDPOINT", "ACCESS_KEY_ID", "SECRET_ACCESS_KEY")
+
+
+def credential(field):
+    """One R2 credential, preferring this project's `DSR_` name."""
+    return secret(f"DSR_{field}") or secret(f"R2_{field}")
 
 
 def connect(bucket=BUCKET, *, required=False):
@@ -46,17 +77,16 @@ def connect(bucket=BUCKET, *, required=False):
     R2 configured. `required=True` turns a missing secret into an error, for
     the case where losing the run is the worse outcome.
     """
-    parts = [secret(n) for n in
-             ("R2_ENDPOINT", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY")]
+    parts = [credential(n) for n in FIELDS]
     if not all(parts):
         if required:
             raise RuntimeError(
-                "Set R2_ENDPOINT, R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY, "
+                "Set DSR_ENDPOINT, DSR_ACCESS_KEY_ID and DSR_SECRET_ACCESS_KEY, "
                 "as environment variables or as Colab secrets.")
         return None
     endpoint, key_id, key_secret = parts
     if not re.fullmatch(r"https://[a-z0-9.]+\.r2\.cloudflarestorage\.com", endpoint):
-        raise ValueError("R2_ENDPOINT must be the HTTPS S3 API endpoint from the R2 dashboard.")
+        raise ValueError("DSR_ENDPOINT must be the HTTPS S3 API endpoint from the R2 dashboard.")
     import boto3
     from botocore.config import Config
     client = boto3.client(

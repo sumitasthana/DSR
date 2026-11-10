@@ -11,3 +11,4 @@ __pycache__/
 /results/
 *.egg-info/
 build/
+.env
