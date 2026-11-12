@@ -31,13 +31,15 @@ a test that would settle it.
 | M1 | Unit tests for the projection and fusion maths | Done |
 | M2 | MNIST, 3 deletions, four methods | Done, rerun on Colab 2026-11-11 at `bb0ff09` |
 | M3 | CIFAR-100, N = 5, end to end | Done, 2026-11-11 |
-| M4 | Full CIFAR-100 sweep, N in {5,10,20,30} | Next |
-| M5-M6 | Saturation curve, write-up | Not started |
+| M4 | Full CIFAR-100 sweep, N in {5,10,20,30} | Done, 2026-11-12 |
+| M5 | Saturation curve | Largely answered by M4's rank sweep |
+| M6 | Write-up | Not started |
 
-45 tests pass on CPU.
+51 tests pass on CPU.
 
-The project has no blocking question open. The one that was blocking, whether a trained adapter
-really uses up four directions, was measured in M3 and it does.
+**The central question is answered.** The method has a hard limit of 16 deletions in the paper's
+own setting. Past that limit it stops working and does not say so. The paper's headline results
+are reported at 20 and 30 deletions, which is past it.
 
 ## M0: the starting model
 
@@ -157,6 +159,64 @@ One correction to our own earlier reasoning. After M2 we said seed spread grows 
 of damage a method does. CIFAR-100 does comparable damage at a tenth of the spread, 41.32 +/- 2.53
 against MNIST's 44.71 +/- 27.91. That generalisation was read from one dataset and has been
 narrowed.
+
+## M4: thirty deletions, and what happens past the limit
+
+Ran locally on 2026-11-12, three seeds. This is the run that goes past the capacity limit M3
+measured.
+
+### The limit predicts, it does not just describe
+
+Until now the limit of 16 was something we had derived and then measured once. M4 used it to
+predict two settings it had never been tested at. Make each patch use 2 directions instead of 4
+and the limit should move to 32. Make it 8 and the limit should move to 8.
+
+| patch size | predicted limit | measured |
+|---|---|---|
+| 2 | 32 | 32 |
+| 4 | 16 | 16 |
+| 8 | 8 | 8 |
+
+Three for three, exactly, with the updates past each limit at the floating-point floor. That is
+the strongest evidence this project has produced, because it is the only claim we have used to
+predict something we had not already seen.
+
+### The finding
+
+After 30 deletions the model is identical to the model after 16. Not nearly identical: the
+difference is exactly 0.0.
+
+| deletion requests | classes | accuracy before | accuracy after |
+|---|---|---|---|
+| 1 to 16, inside the limit | 16 | 66.56% | 1.12% |
+| 17 to 30, past the limit | 14 | 71.50% | 49.00% |
+
+Fourteen of the thirty requests changed nothing. Their classes are still there at roughly half
+their original accuracy, and they dropped that far only as collateral damage from the first
+sixteen deletions, not from their own.
+
+Nothing raised an error. Every one of those requests returned normally. A caller asking this
+system to delete its twentieth class is told it succeeded and gets a model that still recognises
+the class.
+
+### What that means for reading the paper
+
+The paper reports results at 20 and 30 deletions and presents the method as stable there. On our
+rebuild, stable at that range means frozen.
+
+Two shapes in the paper's own numbers fit this. Its method's retain accuracy barely moves between
+N = 20 and N = 30, which reads as robustness; in ours it moves from 49.48 to 49.55 because it is
+the same model in both. And its forget accuracy is high at N = 30, 53.83%, which reads as gentle
+forgetting; in ours forget accuracy *rises* with N, 11.30 to 23.86, because the average fills up
+with classes that were never unlearned at all. A rising forget curve is what ignored deletions
+look like.
+
+### The limits of the claim
+
+This says what the published equations do when implemented literally. It does not say what the
+authors' code did, because that was never released, and several details the paper omits would
+change the outcome. Our backbone also starts at 68.83% against their 60.39%, so no absolute
+number here lines up with theirs.
 
 ## What has been verified end to end on Colab
 

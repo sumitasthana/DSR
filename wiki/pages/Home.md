@@ -28,22 +28,38 @@ choice we made, listed on [Assumptions](Assumptions). Those choices are ours and
 | On MNIST the paper's own method is excellent: near-total forgetting at almost no cost. | M2, 0.23% on the deleted digit while keeping 96.59% of 96.75% |
 | A trained adapter really does consume all 4 directions, on the paper's own dataset. So capacity is 16 tasks, measured and not assumed. | M3, test T1: reserved rank 4 on every task, both projected methods, all 3 seeds |
 | The paper's central claim holds on CIFAR-100: constraining during training keeps more than plain subtraction. | M3, 63.77% against 58.87% at lambda 1.0, from 68.93% |
+| The limit is predictive, not descriptive. Change the patch size to 2, 4 or 8 and it moves to 32, 16 or 8, exactly. | M4, test T2 |
+| **Past the limit the method silently stops working.** After 30 deletions the model is identical to after 16, difference exactly 0.0. Fourteen of thirty requests changed nothing and returned normally. | M4, test T3 and D3 |
+
+### The main finding
+
+The method has a hard capacity limit. Each deletion permanently consumes 4 of the model's 64
+input directions, so after 16 deletions there is nothing left and every further request is a
+no-op. It does not degrade and it does not raise an error. It returns success and leaves the
+class in place.
+
+We measured this directly. After 30 sequential deletions the model's weights differ from the
+16-deletion model by exactly zero, and the 14 classes requested after the limit were still at
+49.00% accuracy, down from 71.50% only through collateral damage from the earlier deletions.
+
+The paper's headline results are at N = 20 and N = 30, both past that limit. Two shapes it
+presents as strengths are what a frozen model looks like: retain accuracy that barely changes
+between N = 20 and N = 30, and forget accuracy that stays high and rises with N because the
+average fills with classes that were never unlearned.
 
 ### What is still open
 
-The capacity question is settled, and it settled against the paper. Figure 3 reports about 23
-directions still free near task 16, which would need each task to consume about 2.56. Every
-trained update we have measured consumes exactly 4, so Figure 3 cannot be produced by the paper's
-own Eq. 3.
+What this does **not** establish is what the authors' own code did. No implementation was
+published. Everything here is a rebuild from the text and the equations, and several details the
+paper omits would change the outcome if we guessed them wrong. Our backbone also starts at 68.83%
+where theirs started at 60.39%, so no absolute number here lines up with theirs.
 
-What remains is the difference between inferring and observing. Table I reports results at N = 20
-and N = 30, both past a budget we have now measured at 16, which means those adapters should be
-training in an empty subspace and producing nothing. We have not watched that happen, because no
-run of ours has yet passed task 16. That is the next milestone.
+So the honest statement is narrow and we try to keep it visible on every page: implemented
+literally, the published equations produce a method that stops working after `floor(d_in / r)`
+deletions without reporting it. Whether that is what the authors ran, we cannot say.
 
-So: we can say the budget is 16 and that the paper's published numbers are not reachable from its
-published equations. We cannot say what the authors' own code did, because it was never released.
-That distinction is load-bearing and we try to keep it visible everywhere on these pages.
+Smaller open items: a relearn probe (test T6), and the alternative reading of the router formula
+that D16 names but no run has tried.
 
 ## Pages
 

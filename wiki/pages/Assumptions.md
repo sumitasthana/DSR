@@ -145,3 +145,24 @@ recipe is still entirely ours.
 - Not an assumption, a measurement: the capacity budget. With `d_in = 64` and rank 4 the budget
   is 16 tasks, and M3 confirmed every trained update consumes exactly 4 directions. N = 5 spends
   5 of 16. Nothing in M3 touches saturation; that is M4.
+
+## M4: CIFAR-100, N up to 30, plus the rank sweep
+
+- Missing: which 30 classes, and in what order. Choice: classes 0 to 29 by index, extending M3's
+  rule. Reason: same as M3. The first five are identical to M3's, which is why the N = 5 slice of
+  this run reproduces M3 exactly and serves as a cross-check.
+- Not an assumption, a design decision: one 30-task sequence is read at N = 5, 10, 20 and 30
+  instead of running four separate experiments. Deletions are sequential and causal, so the first
+  k tasks of a long run are the tasks a k-task run would have trained. `tests/test_m4.py` asserts
+  this rather than assuming it, for all three non-router methods and through to the reported
+  metrics. The router is excluded because its gate is trained over all N adapters at once, so it
+  gets a separate gate per N.
+- Missing: nothing about the rank sweep, which is ours entirely. Choice: ranks 2, 4 and 8, each
+  run two tasks past its own predicted budget of 32, 16 and 8, on one seed. Reason: the sweep
+  measures a deterministic property of the projection, not a trained outcome, so seeds would add
+  cost and no information. Two tasks past the budget is enough to show the collapse rather than
+  merely reach it. Change `m4.rank_sweep` and `m4.rank_sweep_margin`.
+- Consequence worth stating plainly: rank 2 needs 33 tasks to show exhaustion, more than the 30
+  the main sequence uses, so the run prepares 34 classes and the main sequence takes the first 30.
+  If someone raises `m4.rank_sweep` to include rank 1, the run would need 66 classes and will
+  refuse rather than silently report a budget it never reached.

@@ -46,6 +46,14 @@ cifar100:
   # first five by index is the one choice that cannot be accused of selection.
   forget_classes: [0, 1, 2, 3, 4]
 
+# M4: the full sweep. One 30-task sequence per method and seed, read at four points,
+# because the first k deletions of a 30-task run are identical to a k-task run.
+m4:
+  tasks: 30                       # Classes 0 to 29, same order rule as M3.
+  checkpoints: [5, 10, 20, 30]    # The N values the paper's Table I reports.
+  rank_sweep: [2, 4, 8]           # Test T2: budgets 32, 16, 8.
+  rank_sweep_margin: 2            # Tasks to run past each predicted budget.
+
 unlearn:
   # MNIST only. CIFAR-100 reads cifar100.forget_classes; the rest of this block
   # is shared by both datasets.

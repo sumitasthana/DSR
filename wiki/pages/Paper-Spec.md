@@ -269,6 +269,55 @@ pattern. It is recorded because the paper's own Table I reports only lambda 0.5 
 the ordering reverses somewhere above that, the choice of reported lambda matters more than the
 paper suggests. M4 repeats this at larger N and will say whether it survives.
 
+### 3.9 What happens past the budget: silent failure
+
+`[VERIFIED: notebooks/04_cifar100_full_sweep.ipynb, M4 run 2026-11-12]` The method does not
+degrade past its capacity budget, and it does not fail loudly. It stops working and reports
+success.
+
+After 30 sequential deletions at rank 4, the fused head differs from the fused head after 16
+deletions by exactly 0.0. Not a small residual: zero. The 14 requests made after the budget ran
+out changed nothing, raised nothing, and returned normally.
+
+Per-class accuracy, in-training at lambda 1.0, makes the cost visible:
+
+| group | classes | before | after |
+|---|---|---|---|
+| deletions 1 to 16, inside the budget | 16 | 66.56% | 1.12% |
+| deletions 17 to 30, past the budget | 14 | 71.50% | 49.00% |
+
+The second group fell only because of collateral damage from the first 16. Their own deletions
+were no-ops. A caller asking this system to delete its 20th class gets no indication that the
+class is still there at roughly half its original accuracy.
+
+This is the mechanism behind two shapes the paper presents as results. In-training retain accuracy
+barely moves between N = 20 and N = 30, 49.48 against 49.55, which reads as stability at scale; it
+is the same model in both. And in-training forget accuracy *rises* with N, 11.30 at N = 20 to
+23.86 at N = 30, because the average is increasingly dominated by classes that were never
+unlearned. A rising forget curve is the signature of ignored deletions.
+
+The scope of the claim matters. This is what the published equations do when implemented
+literally. The authors' own code was never released, and several unstated choices would change
+it.
+
+### 3.10 The budget as a prediction
+
+`[VERIFIED: M4 rank sweep, 2026-11-12]` Until M4 the capacity law was derived from Eq. 3 and
+measured once, at rank 4. M4 used it to predict two ranks it had never been tested at.
+
+| rank | predicted budget | measured | update norms past it |
+|---|---|---|---|
+| 2 | 32 | 32 | ~9e-26 |
+| 4 | 16 | 16 | ~8e-26 |
+| 8 | 8 | 8 | ~4e-26 |
+
+Three for three, exactly, with the updates past each budget at the floating-point floor. The
+accumulated correction stops growing at the same point and never moves again: at lambda 1.0 its
+norm is 88.011 at task 16, 17 and 30 alike.
+
+This is the strongest evidence in the project, because it is the only claim that was used to
+predict an unobserved outcome rather than to describe an observed one.
+
 ---
 
 ## Section 4. Open Discrepancies and Verification Tests
@@ -279,7 +328,7 @@ paper suggests. M4 repeats this at larger N and will say whether it survives.
 |---|---|---|
 | D1 | low | `B_k` is `r x d_out` in Sec. III and `100 x 4` in Sec. IV-B. We use `4 x 100`, as required by `A_k B_k`. |
 | D2 | resolved | Sec. IV-D states that about 23 free dimensions remain at `N` near 16. Eq. 3 with full-rank r=4 updates gives 0. To leave 23, each task would consume 41/16 = 2.56 directions. Either Fig. 3 is wrong or the updates are rank-deficient. **Settled against the paper, 2026-11-11.** T1 measured every trained update on real CIFAR-100 data at exactly rank 4, across 5 tasks, 2 methods and 3 seeds, with no exceptions. The updates are not rank-deficient, so Fig. 3 cannot be produced by Eq. 3 as published. See 3.7. This is a statement about the equations as written; it does not establish what the authors' own unpublished code did. |
-| D3 | high | Table I reports `N = 20` and `N = 30`, both past `N_max = 16`. Under the paper's own equations those tasks produce `dW_k = 0`. The reported stability may measure a frozen model. **Promoted from derived to measured, 2026-11-11.** `N_max = 16` no longer rests on the assumption of full-rank updates: T1 measured it on the paper's own dataset. Every task past 16 therefore has an empty subspace to train in. Still not demonstrated, because no run of ours has yet crossed 16. M4 does, and it is the run that turns this from an inference into an observation. |
+| D3 | resolved | Table I reports `N = 20` and `N = 30`, both past `N_max = 16`. Under the paper's own equations those tasks produce `dW_k = 0`. The reported stability may measure a frozen model. **Demonstrated 2026-11-12.** It does. The fused head after 30 deletions differs from the head after 16 by exactly 0.0, and the 14 deletion requests past the budget left their classes at 49.00% accuracy while returning normally. In-training retain moves 49.48 to 49.55 between N = 20 and N = 30 because it is the same model. See 3.9. Scope: this is what the published equations do when implemented literally, not a claim about the authors' unreleased code. **Promoted from derived to measured, 2026-11-11.** `N_max = 16` no longer rests on the assumption of full-rank updates: T1 measured it on the paper's own dataset. Every task past 16 therefore has an empty subspace to train in. Still not demonstrated, because no run of ours has yet crossed 16. M4 does, and it is the run that turns this from an inference into an observation. |
 | D4 | high | Fig. 3 is labelled `lambda = 2.0`, but `lambda` appears only in Eq. 1. `rank(P_k)` cannot depend on it. Either the label is vacuous, or `lambda` touches training in their code in a way the paper does not describe. |
 | D5 | high | Sec. III-B2 claims "zero interference with historical tasks" and that the constraint "maximizes unlearning efficacy". Both are false as stated, and the second contradicts Sec. IV-D. See 3.4. |
 | D6 | high | "Forget Acc." is never defined. Current task only, or averaged over all classes forgotten so far? The trend across `N` means opposite things under the two readings. |
@@ -291,7 +340,7 @@ paper suggests. M4 repeats this at larger N and will say whether it survives.
 | D12 | medium | Optimizer, learning rate, epochs, batch size, `A_k` and `B_k` initialisation, and class ordering are all unspecified. |
 | D13 | low | MNIST MLP hidden size and recipe unspecified. Forget accuracy is reported as "the 10-50% range", a 40-point interval given as a result. |
 | D14 | high | Single numbers throughout. No seeds, no error bars, no variance. Raised from medium on 2026-11-11: three seeds on MNIST, a far simpler problem, give static retain 44.71 +/- 27.91 and post-hoc forget 63.14 +/- 35.16 at lambda 2.0. Spread grows with the amount of damage done, and the paper's N=30 rows sit in its highest-damage regime. Single numbers there are not interpretable. **Narrowed the same day after M3.** CIFAR-100 at N=5 does comparable damage at far lower spread: static retain 41.32 +/- 2.53 at lambda 2.0, an order of magnitude tighter than the MNIST cell. So "spread grows with damage" is not a general rule and was over-read from one dataset. What stands is the unchanged part: the paper reports single numbers, we have measured spreads up to +/- 28 in one setting, and nothing in the paper lets a reader tell which setting its own numbers resemble. |
-| D15 | high | At `N = 30`, doubling `lambda` from 0.5 to 1.0 moves static fusion retain accuracy by 22.47 points (35.21 to 12.74) but their own method by 0.70 points (58.76 to 58.06). A quantity that barely responds to doubling its multiplier is near zero. Independent evidence for D3. Strengthened 2026-11-11: the seed spread measured in M2 reaches +/- 28 points in comparable high-damage regimes, so a 0.70-point difference reported without variance cannot be read as a measurement. This does not show their number is noise; it shows that nothing in the paper distinguishes it from noise. |
+| D15 | high | At `N = 30`, doubling `lambda` from 0.5 to 1.0 moves static fusion retain accuracy by 22.47 points (35.21 to 12.74) but their own method by 0.70 points (58.76 to 58.06). A quantity that barely responds to doubling its multiplier is near zero. Independent evidence for D3. Strengthened 2026-11-11: the seed spread measured in M2 reaches +/- 28 points in comparable high-damage regimes, so a 0.70-point difference reported without variance cannot be read as a measurement. This does not show their number is noise; it shows that nothing in the paper distinguishes it from noise. Confirmed at the paper's own N on 2026-11-12: at N = 30 our static retain spread is +/- 9.86 and in-training is +/- 4.44, both far larger than the 0.70 points the paper's argument rests on. D15 also gains a second reading from 3.9: their method barely responds to lambda at N = 30 partly because most of its updates are exactly zero. |
 
 | D16 | high | Added 2026-11-11. The paper's Sec. II router formula, `h = x W_base + sum_k alpha_k(x) x A_k B_k`, carries a plus sign and no lambda, so it adds each adapter's learned forget-class competence rather than removing it. Implemented literally it is worse than doing nothing: forget accuracy 98.84% against a 95.97% baseline, retain 83.39% against 97.14%, identical at every lambda. Table I presents the router as a reasonable baseline at retain 59.49% / forget 59.10%. Those numbers cannot come from this formula. Either a minus sign and a lambda are intended and unstated, or the router row describes something else. |
 
@@ -300,8 +349,8 @@ paper suggests. M4 repeats this at larger N and will say whether it survives.
 | ID | Resolves | Test |
 |---|---|---|
 | T1 | D2, D3, D10 | **Done 2026-11-11.** Reserved rank was 4 on every one of 5 tasks, for both projected methods, on all 3 seeds. Free rank fell 64, 60, 56, 52, 48, 44. The first branch of the pre-registered rule: the budget is 16 and Fig. 3 is not reachable from Eq. 3. `[VERIFIED]` |
-| T2 | D3 | Sweep `r` over {2, 4, 8}. The budget predicts exhaustion at `k` = 32, 16, 8. Confirm the free-rank curve reaches zero at the predicted index in each case. This is the prediction that makes the budget a result rather than an observation. |
-| T3 | D15, D3 | **Started 2026-11-11, not answered.** M3 recorded the norm at every task and lambda: it grows at every one of the 5 tasks and is exactly linear in lambda. N = 5 of a 16-task budget, so the predicted stop has not been reached. The measurement that matters needs N > 16, which is M4. |
+| T2 | D3 | **Done 2026-11-12.** Free rank reached exactly 0 at task 32, 16 and 8 for ranks 2, 4 and 8, with updates past each budget at ~1e-26. Three predictions, three exact hits, on two ranks never previously tested. `[VERIFIED]` |
+| T3 | D15, D3 | **Done 2026-11-12.** At lambda 1.0 the norm of the accumulated correction is 83.317 after 15 tasks, 88.011 after 16, and 88.011 after both 17 and 30. It stops growing exactly at the budget and never moves again. Linear in lambda throughout. `[VERIFIED]` |
 | T4 | D3 | **Done 2026-11-08.** For `k > floor(d_in / r)`, `norm(dW_k)` fell to ~1e-13. Rank sweep {2,4,8} gave budgets 32, 16, 8. `[VERIFIED]` |
 | T5 | D5 | **Done 2026-11-08.** Overlap ~1.7e-16 while 69.6% of predictions changed. `[VERIFIED]` |
 | T6 | D11 | Relearn probe. After unlearning task k, fine-tune briefly on a small sample of the forgotten class and record how fast accuracy returns. Run static fusion as the control, since it genuinely damages the model. |
@@ -312,12 +361,20 @@ T4, T5 and T7 are done, in `notebooks/01_projection_budget_checks.ipynb`, run re
 the project's run record for 2026-11-08, entry 1. T8 is done, in
 `notebooks/02_mnist_four_methods.ipynb`, recorded in the project's run record for 2026-11-11, entry 1.
 T1 is done, in `src/run_m3.py`, recorded in the project's run record for 2026-11-11, entry 2.
-T3 is started but needs N > 16, so it carries over to M4. T2 and T6 are the two that still need
-new runs.
+T2 and T3 are done, in `notebooks/04_cifar100_full_sweep.ipynb`, recorded in the project's run
+record for 2026-11-12, entry 1. T6, the relearn probe for D11, is the only test left unrun.
 
 ### 4.3 Active blockers
 
-**None, as of 2026-11-11.** D2 was the last one and M3 settled it.
+**None.** D2 was the last one, settled by M3 on 2026-11-11. D3, the question it fed into, was
+demonstrated by M4 on 2026-11-12 and is no longer open either.
+
+The project's central question is answered. The paper's method has a hard capacity limit of
+`floor(d_in / r)` deletions, which is 16 in its own setting. The limit was derived from the
+paper's equations, measured, and then used to predict two untested ranks correctly. Past that
+limit the method silently stops working, and the paper's headline results at N = 20 and N = 30
+sit past it. What remains is description, not discovery: T6, the alternative router reading named
+in D16, and the write-up.
 
 The history, kept because the order of these findings matters. The budget law was settled first
 by T4: capacity is `floor(d_in / r)` and updates past it are numerically zero. That left one gap,
@@ -359,3 +416,6 @@ Format: `[Date] | [Section] | Previous understanding -> Corrected understanding 
 - 2026-11-11 | Sec. 3.7 (new), Sec. 4.1 D2, D3; Sec. 4.2 T1 | The budget law was arithmetic and D2 was the project's last blocker, because `N_max = 16` assumed trained updates are full rank and nothing had measured one. -> M3 ran N = 5 on CIFAR-100 and measured reserved rank 4 on every task, method and seed. D2 is resolved against the paper: Fig. 3's ~23 free dimensions near N = 16 cannot come from Eq. 3. D3 is promoted from derived to measured and stays high until a run crosses task 16. Found by running the pre-registered T1 measurement on the paper's own dataset.
 - 2026-11-11 | Sec. 4.1 D14 | D14 claimed seed spread grows with the amount of damage a method does, read from MNIST alone. -> CIFAR-100 does comparable damage at a tenth of the spread (static retain 41.32 +/- 2.53 against MNIST's 44.71 +/- 27.91), so the claim was over-read from one dataset and is now narrowed to what the evidence supports. Found by comparing the M3 seed spreads against M2's.
 - 2026-11-11 | Sec. 3.8 (new), Sec. 4.2 T3 | The spec treated the paper's method as dominating static fusion across the lambda range, and expected T3 to be answered by M3. -> At lambda 2.0 in-training retains 37.12% against static's 41.32%, a reversal at the top of the range, recorded as unverified pending M4. T3 cannot be answered below N = 16 and carries over to M4. Found in the M3 method comparison and the fusion-norm trace.
+- 2026-11-12 | Sec. 3.10 (new), Sec. 4.2 T2, T3 | The budget law was measured at rank 4 only, so it described one observation rather than predicting anything. -> M4 swept ranks 2, 4 and 8 and the free rank hit zero at exactly 32, 16 and 8, with updates past each budget at the floating-point floor. T3 also closed: the accumulated correction is 88.011 at tasks 16, 17 and 30 alike. The law now predicts, which is a stronger claim than it previously carried. Found by running the pre-registered rank sweep.
+- 2026-11-12 | Sec. 3.9 (new), Sec. 4.1 D3 | D3 held that the paper's N = 20 and N = 30 rows might describe a model frozen at task 16, inferred from the budget but never observed. -> Observed. The fused head after 30 deletions differs from the head after 16 by exactly 0.0, and 14 of 30 deletion requests changed nothing while returning normally, leaving their classes at 49.00%. In-training retain moves 49.48 to 49.55 across N = 20 to 30 because it is the same model, and its forget accuracy rises with N because the average fills with classes never unlearned. D3 resolved. Found by running M4 past the budget and reading per-class accuracy either side of it.
+- 2026-11-12 | Sec. 4.1 D15 | D15's variance argument rested on MNIST spreads at a different N from the paper's. -> Measured at the paper's own N = 30: static retain +/- 9.86, in-training +/- 4.44, both far larger than the 0.70-point difference the paper's argument rests on. D15 gains a second mechanism from 3.9, since a method whose updates are mostly zero cannot respond to lambda. Found while assembling the Table I analogue.
