@@ -318,6 +318,36 @@ norm is 88.011 at task 16, 17 and 30 alike.
 This is the strongest evidence in the project, because it is the only claim that was used to
 predict an unobserved outcome rather than to describe an observed one.
 
+### 3.11 Numerical stability near the budget
+
+`[VERIFIED: nb04 Colab run vs local run, 2026-11-12]` The in-training constrained solve becomes
+ill-conditioned as the free subspace runs out, and two machines stop agreeing on it before the
+budget is reached.
+
+Relative disagreement between the local run and the Colab run, in the norm of each trained update:
+
+| tasks | in-training, median | in-training, worst | post-hoc, worst |
+|---|---|---|---|
+| 1 to 4 | 1.5e-07 | 1.5e-06 | 3.7e-07 |
+| 5 to 8 | 7.1e-07 | 5.6e-06 | 1.2e-06 |
+| 9 to 12 | 4.0e-05 | 2.0e-02 | 2.7e-07 |
+| 13 to 16 | 4.3e-03 | 3.2e-01 | 2.0e-06 |
+
+Post-hoc trains without a constraint and projects afterwards, and it stays at the float noise
+floor across the whole sequence. In-training, which is the paper's method, drifts by four orders
+of magnitude over the same 16 tasks. The projector is identical in both, so the instability comes
+from solving inside a shrinking subspace, not from the SVD bookkeeping.
+
+The consequence for reported numbers: at N = 5 the two runs are identical, at N = 10 they differ
+by at most 0.16 points, and at N = 20 and N = 30 they differ by up to 1.34 points on retain
+accuracy and 8 points on a single class. Everything structural is unaffected. Every reserved and
+free rank matches exactly on both machines, both exhaust at the predicted task for ranks 2, 4 and
+8, and both show the fused correction frozen from task 16 onward.
+
+This bears on D15. The paper reports single numbers at N = 20 and N = 30 and rests an argument on
+a 0.70-point difference. Those are the values that our own two runs of the same code reproduce
+least well.
+
 ---
 
 ## Section 4. Open Discrepancies and Verification Tests
@@ -340,7 +370,9 @@ predict an unobserved outcome rather than to describe an observed one.
 | D12 | medium | Optimizer, learning rate, epochs, batch size, `A_k` and `B_k` initialisation, and class ordering are all unspecified. |
 | D13 | low | MNIST MLP hidden size and recipe unspecified. Forget accuracy is reported as "the 10-50% range", a 40-point interval given as a result. |
 | D14 | high | Single numbers throughout. No seeds, no error bars, no variance. Raised from medium on 2026-11-11: three seeds on MNIST, a far simpler problem, give static retain 44.71 +/- 27.91 and post-hoc forget 63.14 +/- 35.16 at lambda 2.0. Spread grows with the amount of damage done, and the paper's N=30 rows sit in its highest-damage regime. Single numbers there are not interpretable. **Narrowed the same day after M3.** CIFAR-100 at N=5 does comparable damage at far lower spread: static retain 41.32 +/- 2.53 at lambda 2.0, an order of magnitude tighter than the MNIST cell. So "spread grows with damage" is not a general rule and was over-read from one dataset. What stands is the unchanged part: the paper reports single numbers, we have measured spreads up to +/- 28 in one setting, and nothing in the paper lets a reader tell which setting its own numbers resemble. |
-| D15 | high | At `N = 30`, doubling `lambda` from 0.5 to 1.0 moves static fusion retain accuracy by 22.47 points (35.21 to 12.74) but their own method by 0.70 points (58.76 to 58.06). A quantity that barely responds to doubling its multiplier is near zero. Independent evidence for D3. Strengthened 2026-11-11: the seed spread measured in M2 reaches +/- 28 points in comparable high-damage regimes, so a 0.70-point difference reported without variance cannot be read as a measurement. This does not show their number is noise; it shows that nothing in the paper distinguishes it from noise. Confirmed at the paper's own N on 2026-11-12: at N = 30 our static retain spread is +/- 9.86 and in-training is +/- 4.44, both far larger than the 0.70 points the paper's argument rests on. D15 also gains a second reading from 3.9: their method barely responds to lambda at N = 30 partly because most of its updates are exactly zero. |
+| D15 | high | At `N = 30`, doubling `lambda` from 0.5 to 1.0 moves static fusion retain accuracy by 22.47 points (35.21 to 12.74) but their own method by 0.70 points (58.76 to 58.06). A quantity that barely responds to doubling its multiplier is near zero. Independent evidence for D3. Strengthened again 2026-11-12: run-to-run spread is not the only problem. Two machines running
+the same code disagree by up to 1.34 points on retain accuracy at N = 20 and N = 30, while
+agreeing exactly at N = 5. See 3.11. Strengthened 2026-11-11: the seed spread measured in M2 reaches +/- 28 points in comparable high-damage regimes, so a 0.70-point difference reported without variance cannot be read as a measurement. This does not show their number is noise; it shows that nothing in the paper distinguishes it from noise. Confirmed at the paper's own N on 2026-11-12: at N = 30 our static retain spread is +/- 9.86 and in-training is +/- 4.44, both far larger than the 0.70 points the paper's argument rests on. D15 also gains a second reading from 3.9: their method barely responds to lambda at N = 30 partly because most of its updates are exactly zero. |
 
 | D16 | high | Added 2026-11-11. The paper's Sec. II router formula, `h = x W_base + sum_k alpha_k(x) x A_k B_k`, carries a plus sign and no lambda, so it adds each adapter's learned forget-class competence rather than removing it. Implemented literally it is worse than doing nothing: forget accuracy 98.84% against a 95.97% baseline, retain 83.39% against 97.14%, identical at every lambda. Table I presents the router as a reasonable baseline at retain 59.49% / forget 59.10%. Those numbers cannot come from this formula. Either a minus sign and a lambda are intended and unstated, or the router row describes something else. |
 
@@ -419,3 +451,4 @@ Format: `[Date] | [Section] | Previous understanding -> Corrected understanding 
 - 2026-11-12 | Sec. 3.10 (new), Sec. 4.2 T2, T3 | The budget law was measured at rank 4 only, so it described one observation rather than predicting anything. -> M4 swept ranks 2, 4 and 8 and the free rank hit zero at exactly 32, 16 and 8, with updates past each budget at the floating-point floor. T3 also closed: the accumulated correction is 88.011 at tasks 16, 17 and 30 alike. The law now predicts, which is a stronger claim than it previously carried. Found by running the pre-registered rank sweep.
 - 2026-11-12 | Sec. 3.9 (new), Sec. 4.1 D3 | D3 held that the paper's N = 20 and N = 30 rows might describe a model frozen at task 16, inferred from the budget but never observed. -> Observed. The fused head after 30 deletions differs from the head after 16 by exactly 0.0, and 14 of 30 deletion requests changed nothing while returning normally, leaving their classes at 49.00%. In-training retain moves 49.48 to 49.55 across N = 20 to 30 because it is the same model, and its forget accuracy rises with N because the average fills with classes never unlearned. D3 resolved. Found by running M4 past the budget and reading per-class accuracy either side of it.
 - 2026-11-12 | Sec. 4.1 D15 | D15's variance argument rested on MNIST spreads at a different N from the paper's. -> Measured at the paper's own N = 30: static retain +/- 9.86, in-training +/- 4.44, both far larger than the 0.70-point difference the paper's argument rests on. D15 gains a second mechanism from 3.9, since a method whose updates are mostly zero cannot respond to lambda. Found while assembling the Table I analogue.
+- 2026-11-12 | Sec. 3.11 (new), Sec. 4.1 D15 | The project assumed its numbers were machine-independent, on the strength of M3 agreeing to one test image across two machines. -> False once the sequence is long. The Colab and local M4 runs agree exactly at N = 5, within 0.16 points at N = 10, and diverge by up to 1.34 points on retain accuracy at N = 20 and N = 30. Post-hoc projection stays at the float noise floor throughout, so the instability is in the constrained solve as the free subspace empties, not in the projector. Every rank number, every budget and the frozen fused head reproduce exactly. Found by pulling the stored Colab artifacts back and comparing cell by cell rather than trusting the printed checks.

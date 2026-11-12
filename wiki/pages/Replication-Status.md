@@ -235,14 +235,31 @@ CIFAR-100 feature cache inside the session, so unlike notebook 01 it used real f
 throughout, and it reproduced the local run to within one test image.
 
 Notebook 04 ran at `eec3c85`, also from a clean tree, with all six of its pre-registered checks
-passing. Its per-class table was compared row by row against the local run: 29 of 30 classes match
-to the decimal, and the one that differs moves by a single test image out of 100, 41.0 against
-42.0. Every class inside the budget matches exactly, so the finding itself is identical on both
-machines.
+passing and its artifacts stored under `dsr/nb04-cifar100-full-sweep/`. That stored copy was
+pulled back and compared cell by cell against the local run, and unlike M3 the two runs do not
+agree everywhere.
 
-That run's artifacts did **not** reach R2, because the storage credentials were not set in the
-session. So M4's confirmation rests on the printed output and the local CSV rather than on a stored
-file. Re-running notebook 04 with the three `DSR_*` variables set would close that gap.
+Everything structural is identical. Every rank number matches exactly: all 180 rows of reserved
+and free rank in the main run, all 62 in the rank sweep. Both runs exhaust at task 32, 16 and 8
+for ranks 2, 4 and 8. Both leave updates past the budget at about 1e-25. Both stop the fused
+correction growing at task 16 and never move it again. The silent-failure result is the same on
+both machines.
+
+What differs is the size of the trained updates, and only where the subspace is nearly full. Of
+1,152 accuracy numbers, 107 differ, all of them in-training at N = 20 or N = 30, by up to 8 points
+on a single class and 1.34 points on full retain accuracy. At N = 5 the two runs are identical to
+the decimal, and at N = 10 the largest gap is 0.16 points.
+
+The cause is visible in the updates themselves. Post-hoc projection trains without a constraint
+and then projects, and its updates agree between the two machines to about 1e-7 at every task from
+1 to 16. In-training projection agrees to 1e-7 for the first few tasks and then drifts: by tasks
+13 to 16 the typical disagreement is 4e-3 and the worst is 0.32. The constrained problem gets
+harder to solve as the free space runs out, so ordinary floating-point differences between two
+machines stop cancelling and start compounding.
+
+That is a finding about the method, not a problem with the run. The paper's own method is
+reproducible in its structure and only roughly reproducible in its numbers once the sequence
+approaches the capacity limit, which is the regime the paper reports its headline results in.
 
 All four milestones that produced numbers have now been run by someone other than the agent, on
 different hardware, from a committed tree. Nothing in this report rests on a result that exists
