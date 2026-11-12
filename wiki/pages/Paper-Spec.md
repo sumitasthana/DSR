@@ -243,7 +243,8 @@ What it does not show is anything about capacity. MNIST uses 3 of a 32-task budg
 
 ### 3.7 The measured capacity of a trained update
 
-`[VERIFIED: src/run_m3.py, M3 run 2026-11-11]` Every adapter trained on real CIFAR-100 data
+`[VERIFIED: notebooks/03_cifar100_n5.ipynb, M3 run 2026-11-11, reproduced on two machines]`
+Every adapter trained on real CIFAR-100 data
 consumed exactly 4 of the 64 input directions. Five tasks, two projected methods, three seeds,
 and the set of distinct values is {4}. The free rank fell 64, 60, 56, 52, 48, 44 with no
 deviation anywhere.

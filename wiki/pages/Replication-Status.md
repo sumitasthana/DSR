@@ -116,8 +116,14 @@ variance, and one of its key claims rests on a 0.70-point difference.
 
 ## M3: CIFAR-100, five deletions, the measurement that mattered
 
-Ran locally on 2026-11-11, three seeds instead of the one the milestone asks for. This is the
-first time the paper's own dataset carried a full deletion sequence.
+Ran twice on 2026-11-11: locally, then on Colab at commit `264dedd` from a clean tree, with the
+results stored. Three seeds instead of the one the milestone asks for. This is the first time the
+paper's own dataset carried a full deletion sequence.
+
+The two runs agree. All 360 measurements were compared value by value, and the largest
+disagreement is 0.0105 points, which is one test image out of 9,500 landing differently on a
+single row. The forget numbers are identical to every decimal. So the result below is not an
+artefact of one machine or one operator.
 
 One number decides this milestone. Every adapter, once trained, used up exactly 4 of the 64
 available input directions. Five tasks, two methods, three seeds, no exceptions and no variation.
@@ -162,6 +168,15 @@ It did **not** use real CIFAR-100 features. The M0 cache is not in the clone, so
 fell back to random stand-ins and said so in its output. Only its interference test depends on
 that, which is why its headline number differs from the local run: 73.4% of predictions changed
 on random inputs against 69.6% on real features. The conclusion is the same either way.
+
+Notebook 02 ran at `bb0ff09` and notebook 03 at `264dedd`, both from clean trees, with artifacts
+under `dsr/nb02-mnist-four-methods/` and `dsr/nb03-cifar100-n5/`. Notebook 03 built the real
+CIFAR-100 feature cache inside the session, so unlike notebook 01 it used real features
+throughout, and it reproduced the local run to within one test image.
+
+All three milestones that produced numbers have now been run by someone other than the agent, on
+different hardware, from a committed tree, with the artifacts kept. Nothing in this report rests
+on a result that exists only in a transcript.
 
 ## Notes
 
