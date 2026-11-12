@@ -21,24 +21,14 @@ def run(config_path, check_only=False):
     return prepare_baseline(load_config(config_path), check_only=check_only)
 
 
-def prepare_baseline(config, check_only=False):
-    """Run M0 from a resolved configuration, including from a notebook.
+def baseline_caches(cfg, context):
+    """Frozen head and verified train/test feature caches for the M0 backbone.
 
-    Load configuration with load_config first to resolve storage paths. A copy
-    prevents the runner from changing the caller's settings between experiments.
+    The folder name is a hash of the configuration, the checkpoint and the
+    environment, so a cache is only reused by a run that would have produced an
+    identical one. Later milestones call this to get the same frozen starting
+    point M0 reported on, rather than rebuilding it themselves.
     """
-    cfg = deepcopy(config)
-    torch.set_num_threads(cfg["runtime"]["threads"])
-    context = provenance()
-    print(json.dumps({"configuration": cfg, "environment": context}, indent=2))
-    device = torch.device(cfg["runtime"]["device"])
-    if device.type == "cuda" and not torch.cuda.is_available():
-        raise RuntimeError("Configured CUDA device is unavailable")
-    print("Plan: fixed public checkpoint, train/test caches, no training; runtime estimate unknown.")
-    print("Resume boundary: completed dataset split. An interrupted split is recomputed.")
-    if check_only:
-        return {"status": "environment_checked"}
-    seed_everything(cfg["seeds"][0])
     model = load_backbone(cfg)
     identity = {"config": cfg, "checkpoint_sha256": checkpoint_hash(model), "environment": context}
     folder = Path(cfg["cache"]["root"]) / digest(identity)
@@ -57,6 +47,28 @@ def prepare_baseline(config, check_only=False):
         )
         print(f"{'Resumed' if resumed else 'Saved'} verified {split} cache", flush=True)
         caches[split] = cache
+    return folder, identity, head, caches
+
+
+def prepare_baseline(config, check_only=False):
+    """Run M0 from a resolved configuration, including from a notebook.
+
+    Load configuration with load_config first to resolve storage paths. A copy
+    prevents the runner from changing the caller's settings between experiments.
+    """
+    cfg = deepcopy(config)
+    torch.set_num_threads(cfg["runtime"]["threads"])
+    context = provenance()
+    print(json.dumps({"configuration": cfg, "environment": context}, indent=2))
+    device = torch.device(cfg["runtime"]["device"])
+    if device.type == "cuda" and not torch.cuda.is_available():
+        raise RuntimeError("Configured CUDA device is unavailable")
+    print("Plan: fixed public checkpoint, train/test caches, no training; runtime estimate unknown.")
+    print("Resume boundary: completed dataset split. An interrupted split is recomputed.")
+    if check_only:
+        return {"status": "environment_checked"}
+    seed_everything(cfg["seeds"][0])
+    folder, identity, head, caches = baseline_caches(cfg, context)
     rows = []
     for seed in cfg["seeds"]:
         seed_everything(seed)

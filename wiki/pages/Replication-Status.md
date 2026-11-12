@@ -30,10 +30,14 @@ a test that would settle it.
 | M0 | Frozen CIFAR-100 backbone, cached features | Done, 2026-11-07 |
 | M1 | Unit tests for the projection and fusion maths | Done |
 | M2 | MNIST, 3 deletions, four methods | Done, rerun on Colab 2026-11-11 at `bb0ff09` |
-| M3 | CIFAR-100, N = 5, end to end | Next |
-| M4-M6 | Full CIFAR-100 sweep, saturation curve, write-up | Not started |
+| M3 | CIFAR-100, N = 5, end to end | Done, 2026-11-11 |
+| M4 | Full CIFAR-100 sweep, N in {5,10,20,30} | Next |
+| M5-M6 | Saturation curve, write-up | Not started |
 
-42 tests pass on CPU.
+45 tests pass on CPU.
+
+The project has no blocking question open. The one that was blocking, whether a trained adapter
+really uses up four directions, was measured in M3 and it does.
 
 ## M0: the starting model
 
@@ -109,6 +113,44 @@ as a reasonable baseline. Those numbers cannot come from this formula, which is 
 Three seeds also showed how noisy this gets once a method does real damage: static fusion retains
 44.71% at lambda 2.0 with a standard deviation of 27.91. The paper reports single numbers with no
 variance, and one of its key claims rests on a 0.70-point difference.
+
+## M3: CIFAR-100, five deletions, the measurement that mattered
+
+Ran locally on 2026-11-11, three seeds instead of the one the milestone asks for. This is the
+first time the paper's own dataset carried a full deletion sequence.
+
+One number decides this milestone. Every adapter, once trained, used up exactly 4 of the 64
+available input directions. Five tasks, two methods, three seeds, no exceptions and no variation.
+The free space fell 64, 60, 56, 52, 48, 44.
+
+That settles the question the project has been carrying since M1. The capacity limit of 16 tasks
+was arithmetic before; now it is measured on real data. The paper needs the opposite: its Figure 3
+reports about 23 directions still free near task 16, which would require each task to use about
+2.56. Nothing here uses less than 4, and nothing in the method could, because the projection
+reserves the top 4 singular directions of an update that has exactly 4.
+
+So the paper's Figure 3 cannot be produced by the paper's own equations. That is a statement
+about the published text, not about what the authors' code did, and we still cannot see their
+code.
+
+The method comparison came out mostly as the paper claims. In-training projection held more
+accuracy than plain subtraction at every lambda up to 1.5: 63.77% against 58.87% at lambda 1.0,
+on a 68.93% starting point. That is the paper's central claim and it holds.
+
+Two things did not. In-training does not forget less deeply than plain subtraction; both hit
+0.00% from lambda 0.5 onward, the same failure M2 found on MNIST. And at lambda 2.0 the ordering
+reverses, with in-training down to 37.12% against 41.32%. One cell at the edge of the range is
+not a pattern, but the paper only ever reports lambda 0.5 and 1.0, so it is worth watching.
+
+The two findings M2 produced both reproduced here, more sharply. Post-hoc projection still cannot
+forget: 56.33% on the deleted class where in-training is at 0.00%. And the router is still worse
+than doing nothing, raising accuracy on the deleted classes from 67.00% to 82.67% while dropping
+the rest.
+
+One correction to our own earlier reasoning. After M2 we said seed spread grows with the amount
+of damage a method does. CIFAR-100 does comparable damage at a tenth of the spread, 41.32 +/- 2.53
+against MNIST's 44.71 +/- 27.91. That generalisation was read from one dataset and has been
+narrowed.
 
 ## What has been verified end to end on Colab
 

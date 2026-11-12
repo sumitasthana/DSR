@@ -81,10 +81,3 @@ def hidden_features(model, loader, cfg):
         raise ValueError("Non-finite features")
     return result
 
-
-def class_subset(cache, label):
-    """The cached rows belonging to one class, used as a task's forget set."""
-    mask = cache["labels"] == label
-    if not bool(mask.any()):
-        raise ValueError(f"No examples for class {label}")
-    return {"features": cache["features"][mask], "labels": cache["labels"][mask]}

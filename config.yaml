@@ -40,7 +40,15 @@ mnist:
   epochs: 3            # Base MLP training; enough for a stable ~97% baseline.
   lr: 0.001
   batch_size: 256
+# M3: CIFAR-100. Every value here is an explicit choice; see ASSUMPTIONS.md "M3".
+cifar100:
+  # The paper never names the CIFAR-100 classes it deletes, or their order. The
+  # first five by index is the one choice that cannot be accused of selection.
+  forget_classes: [0, 1, 2, 3, 4]
+
 unlearn:
+  # MNIST only. CIFAR-100 reads cifar100.forget_classes; the rest of this block
+  # is shared by both datasets.
   forget_classes: [9, 5, 3]   # The order the paper states for MNIST.
   epochs: 20           # Per unlearning task, on that class's training images.
   lr: 0.01

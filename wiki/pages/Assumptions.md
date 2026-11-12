@@ -116,3 +116,32 @@ The paper gives MNIST two sentences. Almost everything below is a choice, not a 
   exactly 4, across both projected methods and all three seeds. The observation does not
   generalise and is not evidence for D2. Test T1 on CIFAR-100 remains the measurement that
   decides it.
+
+## M3: CIFAR-100, N = 5, four methods
+
+This is the paper's own dataset. More of it is specified than MNIST was, but the unlearning
+recipe is still entirely ours.
+
+- Missing: which classes are deleted, and in what order. Choice: classes 0, 1, 2, 3, 4 by index,
+  in that order. Reason: the paper names no classes and gives no ordering rule. The first five by
+  index is the one choice that cannot be accused of selecting easy or hard classes after the
+  fact. Change `cifar100.forget_classes` in `config.yaml`. Consequence: each task has 500
+  training images, an order of magnitude fewer than an MNIST class, so adapters see far fewer
+  gradient steps at the same epoch count.
+- Missing: the adapter training recipe, again. Choice: the same `unlearn` block M2 used, Adam at
+  1e-2 for 20 epochs at batch 128. Reason: changing it between datasets would make the two
+  milestones incomparable, and the paper gives no recipe for either. Consequence: 500 images at
+  batch 128 is 4 steps per epoch, so 80 steps per task against roughly 960 on MNIST. We have not
+  checked whether the adapters are undertrained at this budget; if a later run shows they are,
+  that is a confound on every M3 number and this entry is where to start.
+- Missing: nothing about the backbone, which the paper does describe. Choice: the public
+  `chenyaofo/pytorch-cifar-models` ResNet-20 pinned at revision `786c1625`. Reason: the paper's
+  own checkpoint was never published. Consequence: our starting point is 68.83% against their
+  60.39%, so absolute numbers cannot be compared with theirs. Only orderings and shapes can.
+- Missing: how many seeds M3 needs. Choice: three, where the project's internal instructions section 7 asks for one.
+  Reason: D14 was raised to high after M2, the run costs minutes on cached features, and a single
+  number would have reproduced the exact weakness we had just criticised the paper for. Recorded
+  as a deviation from the milestone, not a silent change to it.
+- Not an assumption, a measurement: the capacity budget. With `d_in = 64` and rank 4 the budget
+  is 16 tasks, and M3 confirmed every trained update consumes exactly 4 directions. N = 5 spends
+  5 of 16. Nothing in M3 touches saturation; that is M4.

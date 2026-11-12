@@ -54,3 +54,11 @@ def validate_cache(cache, cfg, expected_count):
         raise ValueError("Invalid features or labels")
     if expected_count == 0 or y.min() < 0 or y.max() >= cfg["model"]["classes"]:
         raise ValueError("Invalid label range")
+
+
+def class_subset(cache, label):
+    """The cached rows belonging to one class, used as a task's forget set."""
+    mask = cache["labels"] == label
+    if not bool(mask.any()):
+        raise ValueError(f"No examples for class {label}")
+    return {"features": cache["features"][mask], "labels": cache["labels"][mask]}

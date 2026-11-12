@@ -26,17 +26,24 @@ choice we made, listed on [Assumptions](Assumptions). Those choices are ours and
 | When the projection is applied decides the outcome. Constraining during training works; projecting afterwards does not. | M2, in-training 0.00% against post-hoc 63.14% on the deleted class |
 | The router formula read literally is worse than doing nothing. It raises accuracy on the class it was asked to delete. | M2, 98.84% against a 95.97% baseline |
 | On MNIST the paper's own method is excellent: near-total forgetting at almost no cost. | M2, 0.23% on the deleted digit while keeping 96.59% of 96.75% |
+| A trained adapter really does consume all 4 directions, on the paper's own dataset. So capacity is 16 tasks, measured and not assumed. | M3, test T1: reserved rank 4 on every task, both projected methods, all 3 seeds |
+| The paper's central claim holds on CIFAR-100: constraining during training keeps more than plain subtraction. | M3, 63.77% against 58.87% at lambda 1.0, from 68.93% |
 
 ### What is still open
 
-The central question is unresolved. The paper reports results at N = 20 and N = 30 tasks, and
-reports free dimensions remaining near N = 16, neither of which is reachable under its own
-equations if every update has full rank 4. Whether a *trained* update actually has full rank 4 is
-the measurement that settles it, and it needs the CIFAR-100 run that has not happened yet.
+The capacity question is settled, and it settled against the paper. Figure 3 reports about 23
+directions still free near task 16, which would need each task to consume about 2.56. Every
+trained update we have measured consumes exactly 4, so Figure 3 cannot be produced by the paper's
+own Eq. 3.
 
-Until then we can say the budget law holds and that the paper's reported numbers are inconsistent
-with it for full-rank updates. We cannot say what their runs actually did. That distinction is
-load-bearing and we try to keep it visible everywhere on these pages.
+What remains is the difference between inferring and observing. Table I reports results at N = 20
+and N = 30, both past a budget we have now measured at 16, which means those adapters should be
+training in an empty subspace and producing nothing. We have not watched that happen, because no
+run of ours has yet passed task 16. That is the next milestone.
+
+So: we can say the budget is 16 and that the paper's published numbers are not reachable from its
+published equations. We cannot say what the authors' own code did, because it was never released.
+That distinction is load-bearing and we try to keep it visible everywhere on these pages.
 
 ## Pages
 
