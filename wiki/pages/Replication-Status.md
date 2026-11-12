@@ -162,8 +162,8 @@ narrowed.
 
 ## M4: thirty deletions, and what happens past the limit
 
-Ran locally on 2026-11-12, three seeds. This is the run that goes past the capacity limit M3
-measured.
+Ran locally on 2026-11-12, three seeds, then run again on Colab the same day from the committed
+tree. This is the run that goes past the capacity limit M3 measured.
 
 ### The limit predicts, it does not just describe
 
@@ -234,9 +234,19 @@ under `dsr/nb02-mnist-four-methods/` and `dsr/nb03-cifar100-n5/`. Notebook 03 bu
 CIFAR-100 feature cache inside the session, so unlike notebook 01 it used real features
 throughout, and it reproduced the local run to within one test image.
 
-All three milestones that produced numbers have now been run by someone other than the agent, on
-different hardware, from a committed tree, with the artifacts kept. Nothing in this report rests
-on a result that exists only in a transcript.
+Notebook 04 ran at `eec3c85`, also from a clean tree, with all six of its pre-registered checks
+passing. Its per-class table was compared row by row against the local run: 29 of 30 classes match
+to the decimal, and the one that differs moves by a single test image out of 100, 41.0 against
+42.0. Every class inside the budget matches exactly, so the finding itself is identical on both
+machines.
+
+That run's artifacts did **not** reach R2, because the storage credentials were not set in the
+session. So M4's confirmation rests on the printed output and the local CSV rather than on a stored
+file. Re-running notebook 04 with the three `DSR_*` variables set would close that gap.
+
+All four milestones that produced numbers have now been run by someone other than the agent, on
+different hardware, from a committed tree. Nothing in this report rests on a result that exists
+only in a transcript.
 
 ## Notes
 
