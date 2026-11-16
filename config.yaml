@@ -54,6 +54,18 @@ m4:
   rank_sweep: [2, 4, 8]           # Test T2: budgets 32, 16, 8.
   rank_sweep_margin: 2            # Tasks to run past each predicted budget.
 
+# M5 isolates Fig. 3: the in-training method at every deletion, including task zero.
+m5:
+  run_label: nb05-cifar100-saturation-v1
+  tasks: 30
+  lambda: 2.0
+  update_zero_atol: 0.0000000001  # Same numerical-zero criterion as diagnostic T4.
+  weight_drift_atol: 0.0000000001
+  paper_retain_reference: 58.5   # Sec. IV-D, a reference, not our matched baseline.
+  paper_free_rank_reference: 23
+  paper_transition_task: 16
+  paper_tolerance_pp: 5.0       # AGENTS.md soft replication tolerance, not uncertainty.
+
 unlearn:
   # MNIST only. CIFAR-100 reads cifar100.forget_classes; the rest of this block
   # is shared by both datasets.

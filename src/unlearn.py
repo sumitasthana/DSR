@@ -71,7 +71,7 @@ def _check_dtype(cfg, *tensors):
         )
 
 
-def run_sequence(method, forget_subsets, head, cfg, seed):
+def run_sequence(method, forget_subsets, head, cfg, seed, on_task=None):
     """Train one adapter per task in order, applying the method's constraint."""
     if method not in METHODS:
         raise ValueError(f"Unknown method: {method}")
@@ -96,6 +96,9 @@ def run_sequence(method, forget_subsets, head, cfg, seed):
             free_rank.append(projector.free_rank)
         updates.append(update)
         adapters.append(factors)
+        if on_task is not None:
+            on_task(task + 1, {"updates": updates, "adapters": adapters,
+                               "reserved": reserved, "free_rank": free_rank})
     return {"updates": updates, "adapters": adapters,
             "reserved": reserved, "free_rank": free_rank}
 
