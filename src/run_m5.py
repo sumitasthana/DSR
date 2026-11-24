@@ -103,22 +103,13 @@ def measure_seed(cfg, head, train_cache, test_cache, seed, on_row=None):
     return rows
 
 
-def run_m5(cfg, raw_head, raw_caches, identity, folder, sync=None):
-    """Persist each task; resume completed seeds, replay interrupted seeds in full.
-
-    Checkpoints are deliberately not uploaded. Every task's RNG is seeded by
-    run_sequence; a restarted seed rebuilds adapters and projector from task one.
-    Task JSONL files are immutable one-line records, not resume checkpoints.
-    """
+def run_seed_records(folder, identity, seeds, tasks, measure, sync=None):
+    """Persist task records from measure(seed, on_row); replay incomplete seeds."""
     folder = Path(folder)
-    status = resume_status(folder, identity, cfg["seeds"], cfg["m5"]["tasks"])
+    status = resume_status(folder, identity, seeds, tasks)
     print("Resume:", status)
-    head = to_projection_dtype(raw_head, cfg)
-    train = to_projection_dtype(raw_caches["train"], cfg)
-    test = to_projection_dtype(raw_caches["test"], cfg)
-    torch.set_num_threads(cfg["runtime"]["threads"])
     all_rows = []
-    for seed in cfg["seeds"]:
+    for seed in seeds:
         path = folder / "seeds" / f"seed-{seed}.json"
         if seed not in status["complete"]:
             def persist(row):
@@ -143,10 +134,23 @@ def run_m5(cfg, raw_head, raw_caches, identity, folder, sync=None):
                     raise IOError("Progress record failed verification")
                 if sync:
                     sync(folder)
-            rows = measure_seed(cfg, head, train, test, seed, on_row=persist)
+            rows = measure(seed, persist)
             _save_record(path, identity, rows)
             if sync:
                 sync(folder)
-        all_rows.extend(load_seed(path, identity, seed, cfg["m5"]["tasks"]))
-        print(f"seed {seed}: verified {cfg['m5']['tasks'] + 1} rows")
+        all_rows.extend(load_seed(path, identity, seed, tasks))
+        print(f"seed {seed}: verified {tasks + 1} rows")
     return all_rows
+
+
+def run_m5(cfg, raw_head, raw_caches, identity, folder, sync=None):
+    """Measure M5 on the full train/test caches using completed-seed recovery."""
+    head = to_projection_dtype(raw_head, cfg)
+    train = to_projection_dtype(raw_caches["train"], cfg)
+    test = to_projection_dtype(raw_caches["test"], cfg)
+    torch.set_num_threads(cfg["runtime"]["threads"])
+
+    def measure(seed, persist):
+        return measure_seed(cfg, head, train, test, seed, on_row=persist)
+
+    return run_seed_records(folder, identity, cfg["seeds"], cfg["m5"]["tasks"], measure, sync)

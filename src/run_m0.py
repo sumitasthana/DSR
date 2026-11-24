@@ -21,7 +21,7 @@ def run(config_path, check_only=False):
     return prepare_baseline(load_config(config_path), check_only=check_only)
 
 
-def baseline_caches(cfg, context):
+def baseline_caches(cfg, context, splits=("train", "test")):
     """Frozen head and verified train/test feature caches for the M0 backbone.
 
     The folder name is a hash of the configuration, the checkpoint and the
@@ -37,7 +37,7 @@ def baseline_caches(cfg, context):
     head = head_state(model)
     save_tensors(folder / "head.pt", head)
     caches = {}
-    for split in ("train", "test"):
+    for split in splits:
         loader = cifar100_loader(cfg, split)
         print(f"Preparing {split}: {len(loader.dataset)} images", flush=True)
         cache, resumed = load_or_create_cache(

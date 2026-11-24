@@ -66,6 +66,19 @@ m5:
   paper_transition_task: 16
   paper_tolerance_pp: 5.0       # AGENTS.md soft replication tolerance, not uncertainty.
 
+stage_b_start:
+  run_label: nb07-cifar100-request16-dev-v1
+  tasks: 16                 # Train on class IDs 0..15. ID 16 is the next target.
+  fixed_retain_start: 30    # Classes 30..99 survive the planned 30-request sequence.
+  lambdas: [0.5, 1.0]       # Evaluate both on each seed's exact same adapter updates.
+  dev_per_class: 100        # One percentage point per image. Remaining 400 can train adapters.
+  split_seed: 1701          # One stratified split shared by every adapter seed and strength.
+  # Proposed development criteria, chosen before this run. Apply to every seed.
+  max_retain_loss_pp: 5.0   # Allow at most five fewer correct predictions per hundred.
+  max_old_accuracy_pct: 20.0  # Each target at its own deletion AND at request 16.
+  max_reversal_pp: 10.0     # Largest allowed rebound from own deletion to request 16.
+  min_next_accuracy_pct: 20.0  # Leave at least 20 points of headroom for request 17.
+
 unlearn:
   # MNIST only. CIFAR-100 reads cifar100.forget_classes; the rest of this block
   # is shared by both datasets.
