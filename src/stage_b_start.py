@@ -35,7 +35,11 @@ def development_split(cache, options, classes):
     return select(~dev_mask), select(dev_mask), manifest
 
 
-def run_start_check(cfg, raw_head, fit, development, identity, folder, sync=None):
+def order_identity(identity, order):
+    return {**identity, "class_order": list(order), "adapter_rng": "by class ID"}
+
+
+def run_start_check(cfg, raw_head, fit, development, identity, folder, sync=None, *, class_order=None):
     """Train once per seed. Record correct counts by class at both strengths per task."""
     options = cfg["stage_b_start"]
     tasks = options["tasks"]
@@ -46,7 +50,12 @@ def run_start_check(cfg, raw_head, fit, development, identity, folder, sync=None
     strengths = options["lambdas"]
     if len(strengths) != len(set(strengths)) or not strengths:
         raise ValueError("Fusion strengths must be nonempty and distinct")
-    subsets = forget_subsets(to_projection_dtype(fit, cfg), list(range(tasks)))
+    order = list(range(tasks)) if class_order is None else list(class_order)
+    if sorted(order) != list(range(tasks)):
+        raise ValueError("Class order must be a permutation of the planned targets")
+    if class_order is not None:
+        identity = order_identity(identity, order)
+    subsets = forget_subsets(to_projection_dtype(fit, cfg), order)
     dev = to_projection_dtype(development, cfg)
     labels = dev["labels"]
     counts = torch.bincount(labels, minlength=classes).tolist()
@@ -68,21 +77,26 @@ def run_start_check(cfg, raw_head, fit, development, identity, folder, sync=None
             free_rank = result["free_rank"][-1] if task else width
             row = {"seed": seed, "task": task, "free_rank": free_rank,
                    "counts": counts, "measurements": measurements}
+            if class_order is not None:
+                row["target_class"] = order[task - 1] if task else None
             persist(row)
             rows.append(row)
 
         record(0, {"updates": [], "free_rank": []})
-        run_sequence("intraining", subsets, head, cfg, seed, on_task=record)
+        run_sequence("intraining", subsets, head, cfg, seed, on_task=record, seed_offsets=order)
         return rows
 
     return run_seed_records(folder, identity, cfg["seeds"], tasks, measure, sync)
 
 
-def summarize(rows, options):
+def summarize(rows, options, *, class_order=None):
     """Score each strength within seed using the same class IDs and images over time."""
     tasks = options["tasks"]
+    order = list(range(tasks)) if class_order is None else list(class_order)
     history = []
     for row in rows:
+        if class_order is not None and row["target_class"] != (order[row["task"]-1] if row["task"] else None):
+            raise ValueError("Saved target does not match the specified request order")
         for measurement in row["measurements"]:
             for label, (correct, count) in enumerate(zip(measurement["correct"], row["counts"], strict=True)):
                 history.append({"seed": row["seed"], "task": row["task"], "free_rank": row["free_rank"],
@@ -95,9 +109,9 @@ def summarize(rows, options):
         ranks = group.groupby("task").free_rank.first()
         exhausted = ranks.index[ranks == 0].tolist()
         earlier = []
-        for label in range(tasks):
-            before, after, final = acc.at[label, label], acc.at[label+1, label], acc.at[tasks, label]
-            earlier.append({"seed": seed, "lambda": strength, "class_id": label, "request": label + 1,
+        for request, label in enumerate(order, 1):
+            before, after, final = acc.at[request-1, label], acc.at[request, label], acc.at[tasks, label]
+            earlier.append({"seed": seed, "lambda": strength, "class_id": label, "request": request,
                             "before": before, "after": after, "at_boundary": final,
                             "drop_pp": before - after, "reversal_pp": max(0.0, final - after)})
         targets.extend(earlier)

@@ -71,7 +71,7 @@ def _check_dtype(cfg, *tensors):
         )
 
 
-def run_sequence(method, forget_subsets, head, cfg, seed, on_task=None):
+def run_sequence(method, forget_subsets, head, cfg, seed, on_task=None, *, seed_offsets=None):
     """Train one adapter per task in order, applying the method's constraint."""
     if method not in METHODS:
         raise ValueError(f"Unknown method: {method}")
@@ -82,12 +82,14 @@ def run_sequence(method, forget_subsets, head, cfg, seed, on_task=None):
     projector = SubspaceProjector(weight.shape[0], cfg["projection"]) if tracked else None
 
     updates, adapters, reserved, free_rank = [], [], [], []
+    if seed_offsets is not None and len(seed_offsets) != len(forget_subsets):
+        raise ValueError("Each request needs one adapter seed offset")
     for task, subset in enumerate(forget_subsets):
         available = projector.matrix.to(weight) if tracked else identity
         # Only the in-training method sees the constraint while optimising.
         trained = train_adapter(subset, weight, bias,
                                 available if method == "intraining" else identity,
-                                cfg, seed * 100 + task)
+                                cfg, seed * 100 + (task if seed_offsets is None else seed_offsets[task]))
         factors = (trained.a.detach().clone(), trained.b.detach().clone())
         update = (available @ factors[0] @ factors[1]) if method == "posthoc" \
             else trained.effective_update().detach().clone()

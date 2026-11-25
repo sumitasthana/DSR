@@ -79,6 +79,12 @@ stage_b_start:
   max_reversal_pp: 10.0     # Largest allowed rebound from own deletion to request 16.
   min_next_accuracy_pct: 20.0  # Leave at least 20 points of headroom for request 17.
 
+stage_b_order:
+  run_label: nb08-cifar100-paired-order-v1
+  lambda: 0.5                # Passed the retained accuracy limit in all three notebook 07 seeds.
+  swap_count: 2              # Exchange the first and last two requests, keeping within-pair order.
+  min_position_gap_pp: 10.0  # Pilot minimum: ten more correct images out of 100 when requested late.
+
 unlearn:
   # MNIST only. CIFAR-100 reads cifar100.forget_classes; the rest of this block
   # is shared by both datasets.
